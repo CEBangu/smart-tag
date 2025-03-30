@@ -85,7 +85,7 @@ func pixelBuffer(from image: UIImage, size: CGSize) -> CVPixelBuffer? {
 }
 
 func loadModel() -> MLModel? {
-    guard let modelURL = Bundle.main.url(forResource: "yolo11l_segment", withExtension: "mlmodelc") else {
+    guard let modelURL = Bundle.main.url(forResource: "yolo11n_segment", withExtension: "mlmodelc") else {
         print("Failed to find model in bundle")
         return nil
     }
@@ -109,14 +109,14 @@ func runSegmentationModel(
         let prediction = try await model.prediction(from: input)
 
         guard
-            let var_2358 = prediction.featureValue(for: "var_2358")?.multiArrayValue,
+            let var_1366 = prediction.featureValue(for: "var_1366")?.multiArrayValue,
             let p = prediction.featureValue(for: "p")?.multiArrayValue
         else {
             print("Failed to retrieve model output tensors.")
             return []
         }
 
-        let detections = extractDetections(from: var_2358, confidenceThreshold: 0.85)
+        let detections = extractDetections(from: var_1366, confidenceThreshold: 0.85)
         print("Found \(detections.count) person detections")
 
         var softMaskImages: [UIImage] = []
@@ -144,15 +144,15 @@ func runSegmentationModel(
 }
 
 func extractDetections(
-    from var_2358: MLMultiArray,
+    from var_1366: MLMultiArray,
     numClasses: Int = 80,
     maskCoeffCount: Int = 32,
     confidenceThreshold: Float = 0.1
 ) -> [YOLODetection] {
-    let numChannels = var_2358.shape[1].intValue
-    let numDetections = var_2358.shape[2].intValue
+    let numChannels = var_1366.shape[1].intValue
+    let numDetections = var_1366.shape[2].intValue
     let expectedChannels = 4 + numClasses + maskCoeffCount
-    let targetClasses: Set<Int> = [0]  // 👈 Only allow 'person' class
+    let targetClasses: Set<Int> = [0]  // Only allow 'person' class
 
     guard numChannels == expectedChannels else {
         print("Unexpected channel count: got \(numChannels), expected \(expectedChannels)")
@@ -162,13 +162,13 @@ func extractDetections(
     var results: [YOLODetection] = []
 
     for i in 0..<numDetections {
-        let x = getValue(var_2358, 0, 0, i)
-        let y = getValue(var_2358, 0, 1, i)
-        let w = getValue(var_2358, 0, 2, i)
-        let h = getValue(var_2358, 0, 3, i)
+        let x = getValue(var_1366, 0, 0, i)
+        let y = getValue(var_1366, 0, 1, i)
+        let w = getValue(var_1366, 0, 2, i)
+        let h = getValue(var_1366, 0, 3, i)
 
         let classScores = (0..<numClasses).map { c in
-            getValue(var_2358, 0, 4 + c, i)
+            getValue(var_1366, 0, 4 + c, i)
         }
 
         guard let maxClassIndex = classScores.indices.max(by: { classScores[$0] < classScores[$1] }) else { continue }
@@ -179,7 +179,7 @@ func extractDetections(
         print("Detection \(i): class \(maxClassIndex), conf \(confidence)")
 
         let maskCoeffs = (0..<maskCoeffCount).map { j in
-            getValue(var_2358, 0, 4 + numClasses + j, i)
+            getValue(var_1366, 0, 4 + numClasses + j, i)
         }
 
         let rect = CGRect(
