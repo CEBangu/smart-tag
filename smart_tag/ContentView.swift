@@ -141,15 +141,7 @@ struct ContentView: View {
                        let uiImage = UIImage(data: data) {
                         selectedImage = uiImage
 
-                        guard let resized = letterboxResize(image: uiImage),
-                              let pixelBuffer = pixelBuffer(from: resized.image, size: CGSize(width: 640, height: 640)),
-                              let model = loadModel()
-                        else {
-                            print("Preprocessing failed")
-                            return
-                        }
-
-                        let masks = await runSegmentationModel(model: model, pixelBuffer: pixelBuffer)
+                        let masks = await runPersonInstanceSegmentation(image: uiImage)
                         tags = masks.map { MaskTag(image: $0) }
                     }
                 }
