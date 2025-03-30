@@ -6,13 +6,15 @@
 //
 
 // TODO: transparent pop-up text box; better clicking options + shouldn't be able to long press anywhere on the screen; save co-ordinates to populate next view
+
+
 import SwiftUI
 import PhotosUI
 
 struct MaskTag: Identifiable {
     let id = UUID()
     let image: UIImage
-    var annotation: String? = nil
+    var meta_data: Dictionary<String, Any>? = nil
 }
 
 struct ContentView: View {
