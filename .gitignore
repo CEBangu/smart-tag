@@ -3,3 +3,5 @@
 *.jpg
 *.jpeg
 *.pt
+yolo11n_segment.mlpackage
+yolo11s_segment.mlpackage
