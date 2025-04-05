@@ -28,6 +28,7 @@ struct ContentView: View {
     @State private var newAnnotationText: String = ""
     @State private var showAnnotationInput = false
     @State private var annotationPosition: CGPoint? = nil // Tap position relative to the image frame
+    @State private var showPostDetail = false
 
     // Fixed Frame Size (Restored)
     let imageFrameWidth: CGFloat = 550
@@ -164,7 +165,10 @@ struct ContentView: View {
                         HStack(spacing: 12) {
                             StoryButton(title: "Your story", image: "person.crop.circle")
                             StoryButton(title: "Close Friends", image: "star.circle.fill", isGreen: true)
-                            Button(action: { print("Send tapped - TODO: Implement post logic") }) {
+                            Button(action: { print("Send tapped - Triggering PostDetailView presentation")
+                                if selectedImage != nil {
+                                    showPostDetail = true
+                                }}) {
                                 Circle() // Original Send button style
                                     .fill(Color.white)
                                     .frame(width: 48, height: 48)
@@ -173,6 +177,7 @@ struct ContentView: View {
                                             .foregroundColor(.black)
                                     )
                             }
+                                .disabled(selectedImage == nil)
                         }
 //                        .padding(.bottom, (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.windows.first?.safeAreaInsets.bottom ?? 0 + 0)
                         .padding(.bottom, 5)
@@ -220,6 +225,17 @@ struct ContentView: View {
                         )
                     }
                     print("Processed \(self.detectedPeople.count) people for tagging.")
+                }
+
+            }
+            .fullScreenCover(isPresented: $showPostDetail) {
+                if let imageToPost = selectedImage {
+                    PostDetailView(image: imageToPost, taggedPeople: detectedPeople)
+                } else {
+                    Text("error: image not available.")
+                        .onAppear {
+                            showPostDetail = false
+                        }
                 }
             }
             // AnnotationInputView is now placed conditionally within the main ZStack
