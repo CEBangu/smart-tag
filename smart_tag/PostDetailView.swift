@@ -6,398 +6,292 @@
 //
 import SwiftUI
 
+// --- Define frame constants (make accessible) ---
+fileprivate let imageFrameWidth: CGFloat = 550
+fileprivate let imageFrameHeight: CGFloat = 750
+// --- End Constants ---
+
 // Main view for displaying the posted image with interactive tags
 struct PostDetailView: View {
     // Data passed from ContentView
     let image: UIImage
-    let taggedPeople: [DetectedPerson] // Contains all necessary data for hit-testing
+    // Ensure this includes maskImage if available from ContentView
+    let taggedPeople: [DetectedPerson]
 
-    // Environment variable to dismiss the view (e.g., via 'X' button)
     @Environment(\.dismiss) var dismiss
 
-    // State for managing the custom tag popover
+    // State for tag popover
     @State private var showTagPopover = false
     @State private var popoverTagName: String? = nil
-    @State private var popoverTargetPosition: CGPoint = .zero // Position relative to the overlay
-    @State private var activeTaggedPerson: DetectedPerson? = nil // Store person for the popover's action
+    // Store tap position relative to the IMAGE FRAME's coordinate space (0,0 top-left)
+    @State private var popoverTargetPosition: CGPoint = .zero
+    @State private var activeTaggedPerson: DetectedPerson? = nil
 
-    // Mock data for UI elements (replace with real data later)
-    let username = "chippy_tv" // Username for the story itself
-    let profileImageName = "person.crop.circle" // Use system name or your asset name
-    let timeAgo = "Now" // Or calculate dynamically
+    // State for single pulse animation
+    @State private var isPulsing: Bool = false
+
+    // Mock data
+    let username = "chippy_tv"
+    let profileImageName = "person.crop.circle"
+    let timeAgo = "Now"
 
     var body: some View {
-        // Wrap the entire view in a NavigationStack to enable navigation links
-        // within this view, even when presented modally.
         NavigationStack {
-            // Use GeometryReader to get the available size for positioning
+            // Use GeometryReader to get parent dimensions for positioning calculations
             GeometryReader { fullViewGeometry in
+                // Main ZStack layers background, content, and UI overlays
                 ZStack {
-                    // Background Color
                     Color.black.ignoresSafeArea()
 
-                    // --- Main Content Layer (Image + Tap Overlay) ---
-                    // Use a ZStack to establish a coordinate space for the popover
+                    // --- Fixed-size Image Content Area ---
+                    // Position this ZStack explicitly using .position()
                     ZStack {
-                        // Display the image, filling the available space (cropping edges if needed)
+                        // 1. Base Image
                         Image(uiImage: image)
                             .resizable()
-                            .scaledToFill()
+                            .scaledToFit() // Fit within the frame
 
-                        // The overlay responsible for detecting taps on tagged regions
+                        // 2. Pulsing Masks
+                        ForEach(taggedPeople) { person in
+                            if person.annotation != nil {
+                                Image(uiImage: person.maskImage)
+                                    .resizable()
+                                    .scaledToFill() // Match ContentView mask scaling
+                                    .blendMode(.plusLighter) // Match ContentView blend mode
+                                    .opacity(isPulsing ? 0.20 : 0.0)
+                                    .animation(.easeInOut(duration: 0.7), value: isPulsing)
+                                    .allowsHitTesting(false)
+                            }
+                        }
+
+                        // 3. Tap Overlay
                         TapRegionOverlayView(
                             taggedPeople: taggedPeople,
-                            imageSize: image.size, // Pass original image size for calculations
+                            imageSize: image.size,
+                            displayFrameSize: CGSize(width: imageFrameWidth, height: imageFrameHeight),
                             onHit: { person, location in
-                                // Action when a tagged person's mask IS tapped (HIT)
                                 if let annotation = person.annotation, !annotation.isEmpty {
-                                    activeTaggedPerson = person // Store the person for the popover's action
+                                    activeTaggedPerson = person
                                     popoverTagName = annotation
-                                    popoverTargetPosition = location // Store tap location within overlay
-                                    // Show popover with animation
+                                    // Location is relative to the TapRegionOverlayView's frame (which is 550x750)
+                                    popoverTargetPosition = location
                                     withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
                                         showTagPopover = true
                                     }
                                 } else {
-                                    // Tapped a detected person with no annotation - hide any existing popover
-                                    withAnimation {
-                                        showTagPopover = false
-                                    }
+                                    withAnimation { showTagPopover = false }
                                 }
                             },
                             onMiss: {
-                                // Action when the tap DOES NOT hit a tagged mask (MISS)
-                                // Hide any visible popover
-                                withAnimation {
-                                    showTagPopover = false
-                                }
+                                withAnimation { showTagPopover = false }
                             }
                         )
-                    }
-                    // Make the ZStack containing the image and tap overlay fill the screen
-                    .frame(width: fullViewGeometry.size.width, height: fullViewGeometry.size.height)
-                    .clipped() // Clip the image content if scaledToFill goes beyond the frame
+                    } // --- End Image/Pulse/Tap ZStack ---
+                    .frame(width: imageFrameWidth, height: imageFrameHeight)
+                    .clipped()
+                    // --- EXPLICITLY POSITION THE FRAME ---
+                    .position(
+                        x: fullViewGeometry.size.width / 2,  // Center horizontally in parent
+                        y: fullViewGeometry.size.height / 2 + (-30) // Center vertically + offset
+                        // Note: Using screen center Y, not the 0.8 multiplier used before
+                    )
+                    // --- Removed separate .offset() ---
 
-                    // --- Tag Popover Display (Modified for Navigation) ---
-                    // Conditionally display the popover view if needed
+
+                    // --- Tag Popover Display (using absolute positioning) ---
                     if showTagPopover, let name = popoverTagName {
-                        // Wrap the visual popover (TagPopoverView) in a NavigationLink
+                        // Calculate the frame's top-left origin based on its explicit position
+                        let frameOriginX = (fullViewGeometry.size.width / 2) - (imageFrameWidth / 2)
+                        let frameOriginY = (fullViewGeometry.size.height / 2) + (-30) - (imageFrameHeight / 2) // Center Y + Offset - Half Height
+
+                        // Calculate absolute position for popover relative to the main ZStack
+                        let absolutePopoverX = frameOriginX + popoverTargetPosition.x
+                        let absolutePopoverY = frameOriginY + popoverTargetPosition.y - 30 // Offset popover above tap
+
                         NavigationLink {
-                            // Destination View: UserProfileView, passing the tapped tag name
                             UserProfileView(username: name)
                         } label: {
-                            // Label for the NavigationLink: This is what the user sees and taps
-                            TagPopoverView(tagName: name) // No action needed here now
+                            TagPopoverView(tagName: name)
                         }
-                        // Keep positioning, transition, and zIndex modifiers on the NavigationLink
-                        .position(x: popoverTargetPosition.x,
-                                  y: popoverTargetPosition.y - 30) // Offset slightly above the tap
-                        .transition(.scale(scale: 0.85).combined(with: .opacity)) // Add animation
-                        .zIndex(1) // Ensure popover appears above other content in the ZStack
-                    } // --- End if showTagPopover ---
+                        // Apply the absolute position
+                        .position(x: absolutePopoverX, y: absolutePopoverY)
+                        .transition(.scale(scale: 0.85).combined(with: .opacity))
+                        .zIndex(1) // Keep popover on top
+                    }
 
 
                     // --- UI Overlay Layer (Header, Footer) ---
-                    // Placed above the image/popover layer in the ZStack
+                    // This VStack should naturally align within the ZStack's bounds
                     VStack(spacing: 0) {
-                        // Header containing profile info, progress, actions
-                        HeaderView(
-                            profileImageName: profileImageName,
-                            username: username, // Username of the story poster
-                            timeAgo: timeAgo
-                        ) {
-                            // Dismiss action for the 'X' button
-                            dismiss()
-                        }
-
-                        Spacer() // Pushes Footer to the bottom
-
-                        // Footer containing message input simulation, heart button
-                        FooterView()
-
-                    } // End VStack for UI Overlay
-                    .padding(.bottom, 10) // Add some padding above home indicator area
-                    // Ensure UI elements in header/footer are tappable
-                    .allowsHitTesting(true)
+                         HeaderView(
+                             profileImageName: profileImageName,
+                             username: username,
+                             timeAgo: timeAgo
+                         ) { dismiss() }
+                         Spacer() // Pushes footer down
+                         FooterView()
+                     }
+                     // Ensure VStack doesn't contribute to unexpected width/shifting
+                     .frame(maxWidth: .infinity) // Allow VStack to span width if needed by children
+                    .padding(.bottom, 10)
+                    .allowsHitTesting(true) // Allow interaction
 
                 } // End main ZStack
-                // Hide the system status bar for a cleaner story-like look
                 .statusBarHidden(true)
-                // No need for .navigationTitle here as it's a modal presentation style
+                .onAppear { // Single Pulse Logic
+                    guard !isPulsing else { return }
+                    isPulsing = false
+                    withAnimation(.easeInOut(duration: 0.7)) { isPulsing = true }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                        withAnimation(.easeInOut(duration: 0.7)) { isPulsing = false }
+                    }
+                } // --- End .onAppear ---
 
             } // End GeometryReader
         } // End NavigationStack
     }
+
+    // Removed calculatePopoverPosition helper function as calculation is inline
 }
 
-// MARK: - Header Subview (Progress Bar, Profile, Actions)
+
+// MARK: - Header Subview (No Changes Needed)
 struct HeaderView: View {
     let profileImageName: String
     let username: String
     let timeAgo: String
-    let dismissAction: () -> Void // Closure to dismiss the view
-
-    // Simple state for progress simulation
-    @State private var progress: CGFloat = 0.7 // Example progress value
-
+    let dismissAction: () -> Void
+    @State private var progress: CGFloat = 0.7
     var body: some View {
         VStack(spacing: 8) {
-            // Progress Bar (Simplified visual representation)
             GeometryReader { geo in
-                Capsule()
-                    .fill(.gray.opacity(0.5)) // Background track
-                    .overlay(alignment: .leading) {
-                        Capsule()
-                            .fill(.white) // Foreground progress
-                            .frame(width: geo.size.width * progress) // Width based on progress
-                    }
-            }
-            .frame(height: 3) // Height of the progress bar
-            .padding(.top, 5) // Padding below potential status bar area
-
-            // Profile Info and Action Buttons
+                Capsule().fill(.gray.opacity(0.5)).overlay(alignment: .leading) {
+                        Capsule().fill(.white).frame(width: geo.size.width * progress) }
+            }.frame(height: 3).padding(.top, 5)
             HStack(spacing: 10) {
-                // Profile picture placeholder
-                Image(systemName: profileImageName) // Use system name or load from asset
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: 36, height: 36)
-                    .clipShape(Circle())
-                    .foregroundColor(.white) // Added in case system image is used
-
-                // Username
-                Text(username)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(.white)
-
-                // Time indicator
-                Text(timeAgo)
-                    .font(.system(size: 15))
-                    .foregroundColor(.white.opacity(0.7))
-
-                // Green Star icon (simplified)
-                Image(systemName: "star.fill")
-                    .foregroundColor(.white)
-                    .font(.system(size: 10))
-                    .padding(5)
-                    .background(Color.green)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-
-                Spacer() // Pushes action buttons to the right
-
-                // Ellipsis Button
-                Button {
-                    print("Ellipsis tapped") // Placeholder action
-                } label: {
-                    Image(systemName: "ellipsis")
-                        .foregroundColor(.white)
-                        .font(.system(size: 20))
-                }
-
-                // Close ('X') Button
-                Button {
-                    dismissAction() // Execute the dismiss closure passed in
-                } label: {
-                    Image(systemName: "xmark")
-                        .foregroundColor(.white)
-                        .font(.system(size: 20, weight: .bold))
-                }
+                Image(systemName: profileImageName).resizable().aspectRatio(contentMode: .fill)
+                    .frame(width: 36, height: 36).clipShape(Circle()).foregroundColor(.white)
+                Text(username).font(.system(size: 15, weight: .semibold)).foregroundColor(.white)
+                Text(timeAgo).font(.system(size: 15)).foregroundColor(.white.opacity(0.7))
+                Image(systemName: "star.fill").foregroundColor(.white).font(.system(size: 10))
+                    .padding(5).background(Color.green).clipShape(RoundedRectangle(cornerRadius: 6))
+                Spacer()
+                Button { print("Ellipsis tapped") } label: { Image(systemName: "ellipsis").foregroundColor(.white).font(.system(size: 20)) }
+                Button { dismissAction() } label: { Image(systemName: "xmark").foregroundColor(.white).font(.system(size: 20, weight: .bold)) }
                 .padding(.leading, 5)
-
-            } // End HStack
-        } // End VStack for Header elements
-        .padding(.horizontal) // Side padding for the header content
-        .padding(.top, 10) // Padding below the progress bar
+            }
+        }.padding(.horizontal).padding(.top, 10)
     }
 }
 
-// MARK: - Footer Subview (Message Bar Simulation, Heart)
+// MARK: - Footer Subview (No Changes Needed)
 struct FooterView: View {
-    // State for the simulated message input
     @State private var messageText = ""
-
     var body: some View {
         HStack(spacing: 15) {
-            // Message Input Field (Visual simulation)
             HStack {
-                // Show placeholder text if TextField is empty
-                if messageText.isEmpty {
-                    Text("Send message...")
-                        .foregroundColor(.white.opacity(0.6))
-                        .padding(.leading, 15)
-                }
-                // Hidden TextField to allow actual input if needed later
-                TextField("", text: $messageText)
-                    .foregroundColor(.white)
-                    .padding(.leading, messageText.isEmpty ? 0 : 15) // Adjust padding based on placeholder
-
-                Spacer() // Allow placeholder/text to fill space
-            }
-            .frame(height: 44) // Standard height for input field
-            .background(Capsule().stroke(Color.white.opacity(0.4), lineWidth: 1)) // Bordered capsule
-
-            // Heart Button
-            Button {
-                print("Heart tapped") // Placeholder action
-            } label: {
-                Image(systemName: "heart")
-                    .foregroundColor(.white)
-                    .font(.system(size: 24)) // Size of the heart icon
-            }
-        }
-        .padding(.horizontal) // Side padding for the footer content
+                if messageText.isEmpty { Text("Send message...").foregroundColor(.white.opacity(0.6)).padding(.leading, 15) }
+                TextField("", text: $messageText).foregroundColor(.white).padding(.leading, messageText.isEmpty ? 0 : 15)
+                Spacer()
+            }.frame(height: 44).background(Capsule().stroke(Color.white.opacity(0.4), lineWidth: 1))
+            Button { print("Heart tapped") } label: { Image(systemName: "heart").foregroundColor(.white).font(.system(size: 24)) }
+        }.padding(.horizontal)
     }
 }
 
-// MARK: - Tag Popover View (The visual appearance of the tappable tag)
+// MARK: - Tag Popover View (No Changes Needed)
 struct TagPopoverView: View {
     let tagName: String
-    // Removed onTapAction as NavigationLink handles the tap
-
     var body: some View {
         Text(tagName)
-            .font(.system(size: 22, weight: .semibold)) // Font styling for the tag
-            .foregroundColor(.white) // Text color
-            .padding(.horizontal, 10) // Horizontal padding inside the background
-            .padding(.vertical, 6)    // Vertical padding inside the background
-            .background(
-                // Semi-opaque black background clipped to a rounded rectangle
-                Color.black.opacity(0.65)
-                .clipShape(RoundedRectangle(cornerRadius: 6)) // Creates the box shape
-            )
-            .shadow(color: .black.opacity(0.4), radius: 3, x: 0, y: 2) // Subtle shadow
-            // No .onTapGesture needed here when used as NavigationLink label
+            .font(.system(size: 22, weight: .semibold))
+            .foregroundColor(.white)
+            .padding(.horizontal, 10).padding(.vertical, 6)
+            .background(Color.black.opacity(0.65).clipShape(RoundedRectangle(cornerRadius: 6)))
+            .shadow(color: .black.opacity(0.4), radius: 3, x: 0, y: 2)
     }
 }
 
 
-// MARK: - Tap Region Overlay (Handles hit testing on masks)
+// MARK: - Tap Region Overlay (Should be correct for Fixed Frame / ScaledToFit)
 struct TapRegionOverlayView: View {
-    let taggedPeople: [DetectedPerson] // Data needed for hit testing
-    let imageSize: CGSize              // Original image dimensions
-    let onHit: (DetectedPerson, CGPoint) -> Void // Callback on successful hit (passes person and location)
-    let onMiss: () -> Void                     // Callback on miss
+    let taggedPeople: [DetectedPerson]
+    let imageSize: CGSize
+    let displayFrameSize: CGSize // e.g., 550x750
+    let onHit: (DetectedPerson, CGPoint) -> Void
+    let onMiss: () -> Void
 
     var body: some View {
-        // Use GeometryReader to understand the overlay's frame in its parent's coordinate space
         GeometryReader { geometry in
-            // Transparent background that can receive gestures
             Color.clear
-                .contentShape(Rectangle()) // Ensures the entire frame is tappable
-                // Use DragGesture with zero minimum distance to reliably capture tap location
+                .contentShape(Rectangle())
                 .simultaneousGesture(
                      DragGesture(minimumDistance: 0)
                         .onEnded { value in
-                            // Perform hit test when the gesture ends (tap finishes)
-                            findTappedPerson(at: value.location, overlaySize: geometry.size)
+                            findTappedPerson(at: value.location, frameSize: geometry.size)
                         }
                 )
         }
+        .frame(width: displayFrameSize.width, height: displayFrameSize.height)
     }
 
-    // --- Hit Testing Logic ---
-    private func findTappedPerson(at location: CGPoint, overlaySize: CGSize) {
-        // Ensure needed dimensions are valid
-        guard imageSize != .zero, overlaySize != .zero else {
-             print("DEBUG findTappedPerson: Invalid sizes (imageSize: \(imageSize), overlaySize: \(overlaySize))")
-             onMiss() // Cannot perform test if sizes are zero
-             return
-        }
-
-        // 1. Determine how the original image is scaled/positioned within the overlay
-        //    using .scaledToFill() behavior.
-        let overlayAspect = overlaySize.width / overlaySize.height
+    // --- Hit Testing Logic for ScaledToFit within Fixed Frame ---
+    // (Logic remains the same as previous correct version)
+    private func findTappedPerson(at location: CGPoint, frameSize: CGSize) {
+        guard imageSize != .zero, frameSize != .zero else { onMiss(); return }
+        // ... (Rest of the hit testing logic is unchanged) ...
+        // 1. Determine image content rect within the fixed frame
+        let frameAspect = frameSize.width / frameSize.height
         let imageAspect = imageSize.width / imageSize.height
-        var imageRectInOverlay: CGRect = .zero
-        var scaleToFill: CGFloat = 1.0
-
-        // Calculate the rectangle the image occupies within the overlay frame
-        if imageAspect > overlayAspect { // Image wider than overlay frame
-            scaleToFill = overlaySize.height / imageSize.height
-            let scaledWidth = imageSize.width * scaleToFill
-            imageRectInOverlay = CGRect(x: (overlaySize.width - scaledWidth) / 2.0, y: 0, width: scaledWidth, height: overlaySize.height)
-        } else { // Image taller than or same aspect as overlay frame
-            scaleToFill = overlaySize.width / imageSize.width
-            let scaledHeight = imageSize.height * scaleToFill
-            imageRectInOverlay = CGRect(x: 0, y: (overlaySize.height - scaledHeight) / 2.0, width: overlaySize.width, height: scaledHeight)
+        var imageRectInFrame: CGRect = .zero
+        if frameAspect > imageAspect {
+            let scaledWidth = imageSize.width * (frameSize.height / imageSize.height)
+            imageRectInFrame = CGRect(x: (frameSize.width - scaledWidth) / 2.0, y: 0, width: scaledWidth, height: frameSize.height)
+        } else {
+            let scaledHeight = imageSize.height * (frameSize.width / imageSize.width)
+            imageRectInFrame = CGRect(x: 0, y: (frameSize.height - scaledHeight) / 2.0, width: frameSize.width, height: scaledHeight)
         }
-        // print("DEBUG findTappedPerson: ImageRectInOverlay: \(imageRectInOverlay)")
-
-        // 2. Check if tap location is within the bounds of the displayed image content
-        guard imageRectInOverlay.contains(location) else {
-            // print("DEBUG findTappedPerson: Tap \(location) outside ImageRectInOverlay \(imageRectInOverlay)")
-            onMiss() // Tap is outside the visible image part
-            return
-        }
-
-        // 3. Convert tap location to be relative to the image content's top-left corner
-        let tapX_relative = location.x - imageRectInOverlay.origin.x
-        let tapY_relative = location.y - imageRectInOverlay.origin.y
-        // print("DEBUG findTappedPerson: Tap Relative: (\(tapX_relative), \(tapY_relative))")
-
-
-        // 4. Convert relative tap location to coordinates in the original, unscaled image
-        guard scaleToFill > 0 else { print("DEBUG findTappedPerson: Invalid scaleToFill"); onMiss(); return }
-        let tapX_in_Image = tapX_relative / scaleToFill
-        let tapY_in_Image = tapY_relative / scaleToFill
-        // print("DEBUG findTappedPerson: Tap in Original Coords: (\(tapX_in_Image), \(tapY_in_Image))")
-
-
-        // --- Iterate through tagged people to check for mask hit ---
-        for person in taggedPeople.reversed() { // Check visually "topmost" first
-            // Ensure all necessary info for this person is available
+        // 2. Check tap within scaled image bounds
+        guard imageRectInFrame.contains(location) else { onMiss(); return }
+        // 3. Convert tap relative to image content
+        let tapX_relative = location.x - imageRectInFrame.origin.x
+        let tapY_relative = location.y - imageRectInFrame.origin.y
+        // 4. Convert relative tap to original image coords
+        let scaleToFit = min(imageRectInFrame.width / imageSize.width, imageRectInFrame.height / imageSize.height)
+        guard scaleToFit > 0 else { onMiss(); return }
+        let tapX_in_Image = tapX_relative / scaleToFit
+        let tapY_in_Image = tapY_relative / scaleToFit
+        // --- Check masks ---
+        for person in taggedPeople.reversed() {
             let lbInfo = person.letterboxInfo
             let modelBox = person.modelInputBoundingBox
             let maskData = person.maskData
             let maskHeight = maskData.count
             let maskWidth = maskData.first?.count ?? 0
-            guard maskWidth > 0, maskHeight > 0 else { continue } // Skip if mask data invalid
-
-            // 5. Convert original image coordinates to the model's input coordinate space (e.g., 640x640)
+            guard maskWidth > 0, maskHeight > 0 else { continue }
+            // 5. Original -> Model Coords
             let tapX_in_Model = tapX_in_Image * lbInfo.scale + lbInfo.xOffset
             let tapY_in_Model = tapY_in_Image * lbInfo.scale + lbInfo.yOffset
             let modelTapPoint = CGPoint(x: tapX_in_Model, y: tapY_in_Model)
-            // print("DEBUG findTappedPerson: Checking Person \(person.id), Model Tap: \(modelTapPoint), Model BBox: \(modelBox)")
-
-
-            // Optimization: Check if tap is within the person's bounding box first
+            // Check BBox
             if modelBox.contains(modelTapPoint) {
-                // print("DEBUG findTappedPerson: Tap inside BBox for Person \(person.id)")
-                // 6. Convert model tap coordinates to the mask's own coordinate system (e.g., 0-160)
+                // 6. Model -> Mask Coords
                 let maskCoordX = (modelTapPoint.x - modelBox.origin.x) * CGFloat(maskWidth) / modelBox.width
                 let maskCoordY = (modelTapPoint.y - modelBox.origin.y) * CGFloat(maskHeight) / modelBox.height
-
-                // Clamp coordinates to be within the valid range of mask indices
                 let clampedX = min(max(maskCoordX, 0), CGFloat(maskWidth - 1))
                 let clampedY = min(max(maskCoordY, 0), CGFloat(maskHeight - 1))
-
-                // Get integer indices for accessing the maskData array
                 let xIdx = Int(floor(clampedX))
                 let yIdx = Int(floor(clampedY))
-
-                // Double-check bounds just in case
-                guard xIdx >= 0 && xIdx < maskWidth && yIdx >= 0 && yIdx < maskHeight else {
-                    // print("DEBUG findTappedPerson: Indices out of bounds (\(xIdx), \(yIdx)) for mask size (\(maskWidth), \(maskHeight))")
-                    continue
-                }
-
-                // Sample the mask data at the calculated indices
+                guard xIdx >= 0 && xIdx < maskWidth && yIdx >= 0 && yIdx < maskHeight else { continue }
+                // Sample mask
                 let maskValue = maskData[yIdx][xIdx]
-                // print("DEBUG findTappedPerson: Sampled Mask Value at [\(yIdx)][\(xIdx)]: \(maskValue)")
-
-
-                // Check if the sampled mask value is above the threshold for a hit
-                // (Using the lower threshold as decided earlier)
-                if maskValue > 0.00001 { // Keep using the lower threshold that worked
-                    print("HIT on person \(person.id), Annotation: \(person.annotation ?? "None")")
-                    // Call the onHit callback, passing the person and the tap location (relative to overlay)
-                    onHit(person, location)
-                    return // Exit function as soon as a hit is found
+                // Threshold check
+                if maskValue > 0.00001 { // Keep low threshold
+                    onHit(person, location) // Pass location relative to frame
+                    return
                 }
-            } else {
-                 // print("DEBUG findTappedPerson: Tap outside BBox for Person \(person.id)")
             }
-        } // End loop through taggedPeople
-        onMiss() // Call the onMiss callback
+        } // End loop
+        onMiss() // No hit found
     }
 }

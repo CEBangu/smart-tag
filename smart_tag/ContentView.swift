@@ -5,9 +5,6 @@
 //  Created by Ciprian Bangu on 2025-03-27.
 //
 
-// TODO: transparent pop-up text box; better clicking options + shouldn't be able to long press anywhere on the screen; save co-ordinates to populate next view
-
-
 import SwiftUI
 import PhotosUI
 import CoreGraphics
