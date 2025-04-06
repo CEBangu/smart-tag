@@ -155,7 +155,7 @@ struct PostDetailView: View {
 }
 
 
-// MARK: - Header Subview (No Changes Needed)
+// MARK: - Header Subview
 struct HeaderView: View {
     let profileImageName: String
     let username: String
@@ -184,7 +184,7 @@ struct HeaderView: View {
     }
 }
 
-// MARK: - Footer Subview (No Changes Needed)
+// MARK: - Footer Subview
 struct FooterView: View {
     @State private var messageText = ""
     var body: some View {
@@ -199,7 +199,7 @@ struct FooterView: View {
     }
 }
 
-// MARK: - Tag Popover View (No Changes Needed)
+// MARK: - Tag Popover View
 struct TagPopoverView: View {
     let tagName: String
     var body: some View {
@@ -213,7 +213,7 @@ struct TagPopoverView: View {
 }
 
 
-// MARK: - Tap Region Overlay (Should be correct for Fixed Frame / ScaledToFit)
+// MARK: - Tap Region Overlay
 struct TapRegionOverlayView: View {
     let taggedPeople: [DetectedPerson]
     let imageSize: CGSize

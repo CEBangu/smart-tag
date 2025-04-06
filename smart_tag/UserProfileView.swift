@@ -19,12 +19,12 @@ struct UserProfileView: View {
         }
     }
 
-    // Mock data for the profile (replace with real data later if needed)
+    // Mock data for the profile
     let profilePicName = "person.crop.circle.fill" // Placeholder system image
     let postCount = Int.random(in: 10...200) // Random placeholder
     let followerCount = Int.random(in: 200...1000)
     let followingCount = Int.random(in: 100...800)
-    let fullName = "Friendo McFriend" // Could potentially map username to a real name
+    let fullName = "Friendo McFriend"
     let bio = "Computer Vision is cool!"
     let link = "https://github.com/CEBangu/smart-tag"
 
