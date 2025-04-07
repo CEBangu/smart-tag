@@ -135,7 +135,7 @@ func runSegmentationModel(
             return []
         }
         
-        let detections = extractDetections(from: var_1648, confidenceThreshold: 0.85)
+        let detections = extractDetections(from: var_1648, confidenceThreshold: 0.87)
         print("Found \(detections.count) person detections")
         
         var results: [SegmentationResult] = []
